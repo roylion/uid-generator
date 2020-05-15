@@ -23,7 +23,7 @@ import java.util.List;
  * @author yutianbao
  */
 @FunctionalInterface
-public interface BufferedUidProvider {
+public interface BufferedUidProvider<T> {
 
     /**
      * Provides UID in one second
@@ -31,5 +31,5 @@ public interface BufferedUidProvider {
      * @param momentInSecond
      * @return
      */
-    List<Long> provide(long momentInSecond);
+    List<T> provide(long momentInSecond);
 }

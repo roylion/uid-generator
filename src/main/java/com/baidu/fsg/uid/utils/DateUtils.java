@@ -15,11 +15,11 @@
  */
 package com.baidu.fsg.uid.utils;
 
+import org.apache.commons.lang.time.DateFormatUtils;
+
 import java.text.ParseException;
 import java.util.Calendar;
 import java.util.Date;
-
-import org.apache.commons.lang.time.DateFormatUtils;
 
 /**
  * DateUtils provides date formatting, parsing
@@ -30,6 +30,7 @@ public abstract class DateUtils extends org.apache.commons.lang.time.DateUtils {
     /**
      * Patterns
      */
+    public static final String DAY_SIMPLE_PATTERN = "yyyyMMdd";
     public static final String DAY_PATTERN = "yyyy-MM-dd";
     public static final String DATETIME_PATTERN = "yyyy-MM-dd HH:mm:ss";
     public static final String DATETIME_MS_PATTERN = "yyyy-MM-dd HH:mm:ss.SSS";
@@ -97,6 +98,14 @@ public abstract class DateUtils extends org.apache.commons.lang.time.DateUtils {
         }
     }
 
+    public static String formatByDaySimplePattern(Date date) {
+        if (date != null) {
+            return DateFormatUtils.format(date, DAY_SIMPLE_PATTERN);
+        } else {
+            return null;
+        }
+    }
+
     /**
      * Format date by 'yyyy-MM-dd HH:mm:ss' pattern
      *
@@ -116,6 +125,11 @@ public abstract class DateUtils extends org.apache.commons.lang.time.DateUtils {
     public static String getCurrentDayByDayPattern() {
         Calendar cal = Calendar.getInstance();
         return formatByDayPattern(cal.getTime());
+    }
+
+    public static String getCurrentDayByDaySimplePattern() {
+        Calendar cal = Calendar.getInstance();
+        return formatByDaySimplePattern(cal.getTime());
     }
 
 }

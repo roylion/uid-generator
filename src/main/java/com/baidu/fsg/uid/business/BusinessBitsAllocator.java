@@ -5,8 +5,7 @@ import org.apache.commons.lang.builder.ToStringStyle;
 import org.springframework.util.Assert;
 
 /**
- * Allocate 64 bits for the UID(long)<br>
- * sign (fixed 1bit) -> deltaSecond -> businessId -> workerId -> sequence(within the same second)
+ * Allocate 29 bits for the UID(long)<br>
  *
  * @author yutianbao
  */
@@ -14,163 +13,210 @@ public class BusinessBitsAllocator {
     /**
      * Total 64 bits
      */
-    public static final int TOTAL_BITS = 1 << 6;
+    public static final int TOTAL_BITS = 29;
 
     /**
-     * Bits for [sign-> businessId-> second-> workId-> sequence]
+     * Bits for [date-> hignSeq-> workerId-> systemId-> bizId-> extraInfo-> sharding-> sequence]
      */
-    private int signBits = 1;
-    private final int timestampBits;
-    private final int sourceBits;
-    private final int typeBits;
-    private final int extBits;
+    private final int dateBits = 8;
+    private final int highSeqBits;
     private final int workerIdBits;
+    private final int systemIdBits;
+    private final int bizIdBits;
+    private final int extraInfoBits;
+    private final int shardingBits;
     private final int sequenceBits;
 
     /**
-     * Max value for workId & sequence
+     * Max value
      */
-    private final long maxDeltaSeconds;
-    private final long maxSource;
-    private final long maxType;
-    private final long maxExt;
+    private final long maxHignSeq;
     private final long maxWorkerId;
+    private final long maxSystemId;
+    private final long maxBizId;
+    private final long maxExtraInfo;
+    private final long maxSharding;
     private final long maxSequence;
 
-    /**
-     * Shift for timestamp & workerId
-     */
-    private final int timestampShift;
-    private final int sourceShift;
-    private final int typeShift;
-    private final int extShift;
-    private final int workerIdShift;
+
+    private final int highSeqBegin;
+    private final int workerIdBegin;
+    private final int systemIdBegin;
+    private final int bizIdBegin;
+    private final int extraInfoBegin;
+    private final int shardingBegin;
+    private final int sequenceBegin;
 
     /**
-     * Constructor with timestampBits, workerIdBits, sequenceBits<br>
-     * The highest bit used for sign, so <code>63</code> bits for timestampBits, workerIdBits, sequenceBits
+     * Constructor
      */
-    public BusinessBitsAllocator(int timestampBits, int sourceBits, int typeBits, int extBits, int workerIdBits, int sequenceBits) {
-        // make sure allocated 64 bits
-        int allocateTotalBits = signBits + timestampBits + sourceBits + typeBits + extBits + workerIdBits + sequenceBits;
-        Assert.isTrue(allocateTotalBits == TOTAL_BITS, "allocate not enough 64 bits");
+    public BusinessBitsAllocator(int highSeqBits, int workerIdBits, int systemIdBits, int bizIdBits, int extraInfoBits, int shardingBits, int sequenceBits) {
+        int allocateTotalBits = dateBits + highSeqBits + workerIdBits + systemIdBits + bizIdBits + extraInfoBits + shardingBits + sequenceBits;
+        Assert.isTrue(allocateTotalBits == TOTAL_BITS, "allocate not enough 29 bits");
 
-        // initialize bits
-        this.timestampBits = timestampBits;
-        this.sourceBits = sourceBits;
-        this.typeBits = typeBits;
-        this.extBits = extBits;
+        /** bits */
+        this.highSeqBits = highSeqBits;
         this.workerIdBits = workerIdBits;
+        this.systemIdBits = systemIdBits;
+        this.bizIdBits = bizIdBits;
+        this.extraInfoBits = extraInfoBits;
+        this.shardingBits = shardingBits;
         this.sequenceBits = sequenceBits;
 
-        // initialize max value
-        this.maxDeltaSeconds = ~(-1L << timestampBits);
-        this.maxSource = ~(-1L << sourceBits);
-        this.maxType = ~(-1L << typeBits);
-        this.maxExt = ~(-1L << extBits);
-        this.maxWorkerId = ~(-1L << workerIdBits);
-        this.maxSequence = ~(-1L << sequenceBits);
+        /** max */
+        this.maxHignSeq = calcMaxVal(highSeqBits);
+        this.maxWorkerId = calcMaxVal(workerIdBits);
+        this.maxSystemId = calcMaxVal(systemIdBits);
+        this.maxBizId = calcMaxVal(bizIdBits);
+        this.maxExtraInfo = calcMaxVal(extraInfoBits);
+        this.maxSharding = calcMaxVal(shardingBits);
+        this.maxSequence = calcMaxVal(sequenceBits);
 
-        // initialize shift
-        this.workerIdShift = sequenceBits;
-        this.extShift = workerIdBits + workerIdShift;
-        this.typeShift = extBits + extShift;
-        this.sourceShift = typeBits + typeShift;
-        this.timestampShift = sourceBits + sourceShift;
-
+        /** begin */
+        this.highSeqBegin = dateBits;
+        this.workerIdBegin = highSeqBegin + highSeqBits;
+        this.systemIdBegin = workerIdBegin + workerIdBits;
+        this.bizIdBegin = systemIdBegin + systemIdBits;
+        this.extraInfoBegin = bizIdBegin + bizIdBits;
+        this.shardingBegin = extraInfoBegin + extraInfoBits;
+        this.sequenceBegin = shardingBegin + shardingBits;
     }
 
     /**
-     * Allocate bits for UID according to delta seconds & workerId & sequence<br>
-     * <b>Note that: </b>The highest bit will always be 0 for sign
+     * Allocate bits
      *
-     * @param deltaSeconds
-     * @param workerId
-     * @param sequence
      * @return
      */
-    public long allocate(long deltaSeconds, long source, long type, long ext, long workerId, long sequence) {
-        return (deltaSeconds << timestampShift) |
-                (source << sourceShift) |
-                (type << typeShift) |
-                (ext << extShift) |
-                (workerId << workerIdShift) |
-                sequence;
+    public String allocate(String date, long hignSeq, long workerId, long systemId, long bizId, long extraInfo, long sharding, long sequence) {
+        return new StringBuilder(date)
+                .append(fillZero(hignSeq, highSeqBits))
+                .append(fillZero(workerId, workerIdBits))
+                .append(fillZero(systemId, systemIdBits))
+                .append(fillZero(bizId, bizIdBits))
+                .append(fillZero(extraInfo, extraInfoBits))
+                .append(fillZero(sharding, shardingBits))
+                .append(fillZero(sequence, sequenceBits))
+                .toString();
+    }
+
+    public String allocate(String date, long hignSeq, long workerId, long sequence) {
+        return new StringBuilder(date)
+                .append(fillZero(hignSeq, highSeqBits))
+                .append(fillZero(workerId, workerIdBits))
+                .append("%s%s%s%s")
+                .append(fillZero(sequence, sequenceBits))
+                .toString();
+    }
+
+    public static String fillZero(long bitVal, int bit) {
+        StringBuilder result = new StringBuilder(String.valueOf(bitVal));
+        while (result.length() < bit) {
+            result.insert(0, "0");
+        }
+        return result.toString();
+    }
+
+    private long calcMaxVal(int bits) {
+        if (bits >= 18) {
+            throw new IllegalArgumentException("最大值超过Long.MAX_VALUE(9223372036854775807)");
+        }
+
+        StringBuilder max = new StringBuilder();
+        for (int i = 0; i < bits; i++) {
+            max.append(9);
+        }
+        return Long.valueOf(max.toString());
     }
 
     /**
      * Getters
      */
-    public int getSignBits() {
-        return signBits;
+    public int getDateBits() {
+        return dateBits;
     }
 
-    public int getTimestampBits() {
-        return timestampBits;
-    }
-
-    public int getSourceBits() {
-        return sourceBits;
-    }
-
-    public int getTypeBits() {
-        return typeBits;
-    }
-
-    public int getExtBits() {
-        return extBits;
+    public int getHighSeqBits() {
+        return highSeqBits;
     }
 
     public int getWorkerIdBits() {
         return workerIdBits;
     }
 
+    public int getSystemIdBits() {
+        return systemIdBits;
+    }
+
+    public int getBizIdBits() {
+        return bizIdBits;
+    }
+
+    public int getExtraInfoBits() {
+        return extraInfoBits;
+    }
+
+    public int getShardingBits() {
+        return shardingBits;
+    }
+
     public int getSequenceBits() {
         return sequenceBits;
     }
 
-    public long getMaxDeltaSeconds() {
-        return maxDeltaSeconds;
-    }
-
-    public long getMaxSource() {
-        return maxSource;
-    }
-
-    public long getMaxType() {
-        return maxType;
-    }
-
-    public long getMaxExt() {
-        return maxExt;
+    public long getMaxHignSeq() {
+        return maxHignSeq;
     }
 
     public long getMaxWorkerId() {
         return maxWorkerId;
     }
 
+    public long getMaxSystemId() {
+        return maxSystemId;
+    }
+
+    public long getMaxBizId() {
+        return maxBizId;
+    }
+
+    public long getMaxExtraInfo() {
+        return maxExtraInfo;
+    }
+
+    public long getMaxSharding() {
+        return maxSharding;
+    }
+
     public long getMaxSequence() {
         return maxSequence;
     }
 
-    public int getTimestampShift() {
-        return timestampShift;
+    public int getHighSeqBegin() {
+        return highSeqBegin;
     }
 
-    public int getSourceShift() {
-        return sourceShift;
+    public int getWorkerIdBegin() {
+        return workerIdBegin;
     }
 
-    public int getTypeShift() {
-        return typeShift;
+    public int getSystemIdBegin() {
+        return systemIdBegin;
     }
 
-    public int getExtShift() {
-        return extShift;
+    public int getBizIdBegin() {
+        return bizIdBegin;
     }
 
-    public int getWorkerIdShift() {
-        return workerIdShift;
+    public int getExtraInfoBegin() {
+        return extraInfoBegin;
+    }
+
+    public int getShardingBegin() {
+        return shardingBegin;
+    }
+
+    public int getSequenceBegin() {
+        return sequenceBegin;
     }
 
     @Override

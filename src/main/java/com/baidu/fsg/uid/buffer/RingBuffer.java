@@ -36,7 +36,7 @@ import com.baidu.fsg.uid.utils.PaddedAtomicLong;
  * 
  * @author yutianbao
  */
-public class RingBuffer {
+public class RingBuffer<T> {
     private static final Logger LOGGER = LoggerFactory.getLogger(RingBuffer.class);
 
     /** Constants */
@@ -48,7 +48,7 @@ public class RingBuffer {
     /** The size of RingBuffer's slots, each slot hold a UID */
     private final int bufferSize;
     private final long indexMask;
-    private final long[] slots;
+    private final T[] slots;
     private final PaddedAtomicLong[] flags;
 
     /** Tail: last position sequence to produce */
@@ -61,7 +61,7 @@ public class RingBuffer {
     private final int paddingThreshold; 
     
     /** Reject put/take buffer handle policy */
-    private RejectedPutBufferHandler rejectedPutHandler = this::discardPutBuffer;
+    private RejectedPutBufferHandler<T> rejectedPutHandler = this::discardPutBuffer;
     private RejectedTakeBufferHandler rejectedTakeHandler = this::exceptionRejectedTakeBuffer; 
     
     /** Executor of padding buffer */
@@ -92,7 +92,7 @@ public class RingBuffer {
 
         this.bufferSize = bufferSize;
         this.indexMask = bufferSize - 1;
-        this.slots = new long[bufferSize];
+        this.slots = (T[])new Object[bufferSize];
         this.flags = initFlags(bufferSize);
         
         this.paddingThreshold = bufferSize * paddingFactor / 100;
@@ -108,7 +108,7 @@ public class RingBuffer {
      * @param uid
      * @return false means that the buffer is full, apply {@link RejectedPutBufferHandler}
      */
-    public synchronized boolean put(long uid) {
+    public synchronized boolean put(T uid) {
         long currentTail = tail.get();
         long currentCursor = cursor.get();
 
@@ -148,7 +148,7 @@ public class RingBuffer {
      * @return UID
      * @throws IllegalStateException if the cursor moved back
      */
-    public long take() {
+    public T take() {
         // spin get next available cursor
         long currentCursor = cursor.get();
         long nextCursor = cursor.updateAndGet(old -> old == tail.get() ? old : old + 1);
@@ -175,7 +175,7 @@ public class RingBuffer {
 
         // 2. get UID from next slot
         // 3. set next slot flag as CAN_PUT_FLAG.
-        long uid = slots[nextCursorIndex];
+        T uid = slots[nextCursorIndex];
         flags[nextCursorIndex].set(CAN_PUT_FLAG);
 
         // Note that: Step 2,3 can not swap. If we set flag before get value of slot, the producer may overwrite the
@@ -193,7 +193,7 @@ public class RingBuffer {
     /**
      * Discard policy for {@link RejectedPutBufferHandler}, we just do logging
      */
-    protected void discardPutBuffer(RingBuffer ringBuffer, long uid) {
+    protected void discardPutBuffer(RingBuffer ringBuffer, T uid) {
         LOGGER.warn("Rejected putting buffer for uid:{}. {}", uid, ringBuffer);
     }
     

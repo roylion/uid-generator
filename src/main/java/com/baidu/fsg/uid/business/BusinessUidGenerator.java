@@ -15,38 +15,32 @@
  */
 package com.baidu.fsg.uid.business;
 
-import com.baidu.fsg.uid.BitsAllocator;
-import com.baidu.fsg.uid.UidGenerator;
 import com.baidu.fsg.uid.exception.UidGenerateException;
 import com.baidu.fsg.uid.utils.DateUtils;
 import com.baidu.fsg.uid.worker.FixedWorkerIdAssigner;
 import com.baidu.fsg.uid.worker.WorkerIdAssigner;
-import org.apache.commons.lang.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.InitializingBean;
 
-import java.util.Date;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.TimeUnit;
 
-public class BusinessUidGenerator implements UidGenerator, InitializingBean {
+public class BusinessUidGenerator implements InitializingBean {
     private static final Logger LOGGER = LoggerFactory.getLogger(BusinessUidGenerator.class);
 
     /**
      * Bits allocate
      */
-    protected int timeBits = 30;
-    protected int sourceBits = 10;
-    protected int typeBits = 5;
-    protected int extBits = 3;
-    protected int workerBits = 4;
-    protected int seqBits = 11;
-
-    /**
-     * Customer epoch, unit as second. For example 2020-05-12 (ms: 1589212800000)
-     */
-    protected String epochStr = "2020-05-12";
-    protected long epochSeconds = TimeUnit.MILLISECONDS.toSeconds(1589212800000L);
+    protected int highSeqBits = 6;
+    protected int workerIdBits = 2;
+    protected int systemIdBits = 4;
+    protected int bizIdBits = 2;
+    protected int extraInfoBits = 2;
+    protected int shardingBits = 3;
+    protected int sequenceBits = 2;
 
     /**
      * Stable fields after spring bean initializing
@@ -57,8 +51,11 @@ public class BusinessUidGenerator implements UidGenerator, InitializingBean {
     /**
      * Volatile fields caused by nextId()
      */
+    protected long highSeq = 0;
     protected long sequence = 0L;
+    protected String date;
     protected long lastSecond = -1L;
+    protected String lastDate = "-1";
 
     /**
      * Spring property
@@ -68,67 +65,62 @@ public class BusinessUidGenerator implements UidGenerator, InitializingBean {
     @Override
     public void afterPropertiesSet() throws Exception {
         // initialize bits allocator
-        bitsAllocator = new BusinessBitsAllocator(timeBits, sourceBits, typeBits, extBits, workerBits, seqBits);
+        bitsAllocator = new BusinessBitsAllocator(highSeqBits, workerIdBits, systemIdBits, bizIdBits, extraInfoBits, shardingBits, sequenceBits);
 
         // initialize worker id
         workerId = workerIdAssigner.assignWorkerId();
         if (workerId > bitsAllocator.getMaxWorkerId()) {
             throw new RuntimeException("Worker id " + workerId + " exceeds the max " + bitsAllocator.getMaxWorkerId());
         }
+        date = DateUtils.getCurrentDayByDaySimplePattern();
 
-        LOGGER.info("Initialized bits(1, {}, {}, {}, {}, {}, {}) for workerID:{}", timeBits, sourceBits, typeBits, extBits, workerBits, seqBits, workerId);
+        LOGGER.info("Initialized bits(8, {}, {}, {}, {}, {}, {}, {}) for workerID:{}", highSeqBits, workerIdBits, systemIdBits, bizIdBits, extraInfoBits, shardingBits, sequenceBits, workerId);
     }
 
-    @Override
-    public long getUID() throws UidGenerateException {
-        throw new UnsupportedOperationException();
-    }
-
-    public long getUID(long source, long type, long ext) throws UidGenerateException {
+    public String getUID(long systemId, long bizId, long extraInfo, long sharding) throws UidGenerateException {
         // Check
-        if (source > bitsAllocator.getMaxSource()) {
-            throw new UidGenerateException("source bits is exhausted. Refusing UID generate. source: " + source + " exceeds the max " + bitsAllocator.getMaxSource());
+        if (systemId > bitsAllocator.getMaxSystemId()) {
+            throwUidGenerateException("SystemId", systemId, bitsAllocator.getMaxSystemId());
         }
-        if (type > bitsAllocator.getMaxType()) {
-            throw new UidGenerateException("type bits is exhausted. Refusing UID generate. type: " + type + " exceeds the max " + bitsAllocator.getMaxType());
+        if (bizId > bitsAllocator.getMaxBizId()) {
+            throwUidGenerateException("BizId", bizId, bitsAllocator.getMaxBizId());
         }
-        if (ext > bitsAllocator.getMaxExt()) {
-            throw new UidGenerateException("ext bits is exhausted. Refusing UID generate. ext: " + ext + " exceeds the max " + bitsAllocator.getMaxExt());
+        if (extraInfo > bitsAllocator.getMaxExtraInfo()) {
+            throwUidGenerateException("ExtraInfo", extraInfo, bitsAllocator.getMaxExtraInfo());
+        }
+        if (sharding > bitsAllocator.getMaxSharding()) {
+            throwUidGenerateException("Sharding", sharding, bitsAllocator.getMaxSharding());
         }
 
         try {
-            return nextId(source, type, ext);
+            return nextId(systemId, bizId, extraInfo, sharding);
         } catch (Exception e) {
             LOGGER.error("Generate unique id exception. ", e);
             throw new UidGenerateException(e);
         }
     }
 
-    @Override
-    public String parseUID(long uid) {
-        long totalBits = BitsAllocator.TOTAL_BITS;
-        long signBits = bitsAllocator.getSignBits();
-        long timestampBits = bitsAllocator.getTimestampBits();
-        long sourceBits = bitsAllocator.getSourceBits();
-        long typeBits = bitsAllocator.getTypeBits();
-        long extBits = bitsAllocator.getExtBits();
-        long workerIdBits = bitsAllocator.getWorkerIdBits();
-        long sequenceBits = bitsAllocator.getSequenceBits();
+    public String parseUID(String uid) {
+        int highSeqBegin = bitsAllocator.getHighSeqBegin();
+        int workerIdBegin = bitsAllocator.getWorkerIdBegin();
+        int systemIdBegin = bitsAllocator.getSystemIdBegin();
+        int bizIdBegin = bitsAllocator.getBizIdBegin();
+        int extraInfoBegin = bitsAllocator.getExtraInfoBegin();
+        int shardingBegin = bitsAllocator.getShardingBegin();
+        int sequenceBegin = bitsAllocator.getSequenceBegin();
 
-        // parse UID
-        long sequence = (uid << (totalBits - sequenceBits)) >>> (totalBits - sequenceBits);
-        long workerId = (uid << (totalBits - bitsAllocator.getExtShift())) >>> (totalBits - workerIdBits);
-        long ext = (uid << (totalBits - bitsAllocator.getTypeShift())) >>> (totalBits - extBits);
-        long type = (uid << (totalBits - bitsAllocator.getSourceShift())) >>> (totalBits - typeBits);
-        long source = (uid << (totalBits - bitsAllocator.getTimestampShift())) >>> (totalBits - sourceBits);
-        long deltaSeconds = uid >>> (totalBits - bitsAllocator.getTimestampShift());
-
-        Date thatTime = new Date(TimeUnit.SECONDS.toMillis(epochSeconds + deltaSeconds));
-        String thatTimeStr = DateUtils.formatByDateTimePattern(thatTime);
+        String date = uid.substring(0, highSeqBegin);
+        String highSeq = uid.substring(highSeqBegin, workerIdBegin);
+        String workerId = uid.substring(workerIdBegin, systemIdBegin);
+        String systemId = uid.substring(systemIdBegin, bizIdBegin);
+        String bizId = uid.substring(bizIdBegin, extraInfoBegin);
+        String extraInfo = uid.substring(extraInfoBegin, shardingBegin);
+        String sharding = uid.substring(shardingBegin, sequenceBegin);
+        String sequence = uid.substring(sequenceBegin);
 
         // format as string
-        return String.format("{\"UID\":\"%d\",\"timestamp\":\"%s\",\"source\":\"%d\",\"type\":\"%d\",\"ext\":\"%d\",\"workerId\":\"%d\",\"sequence\":\"%d\"}",
-                uid, thatTimeStr, source, type, ext, workerId, sequence);
+        return String.format("{\"UID\":\"%s\",\"date\":\"%s\",\"highSeq\":%s,\"workerId\":%s,\"systemId\":%s,\"bizId\":%s,\"extraInfo\":%s,\"sharding\":%s,\"sequence\":%s}",
+                uid, date, highSeq, workerId, systemId, bizId, extraInfo, sharding, sequence);
     }
 
     /**
@@ -137,56 +129,41 @@ public class BusinessUidGenerator implements UidGenerator, InitializingBean {
      * @return UID
      * @throws UidGenerateException in the case: Clock moved backwards; Exceeds the max timestamp
      */
-    protected synchronized long nextId(long source, long type, long ext) {
-        long currentSecond = getCurrentSecond();
+    protected synchronized String nextId(long systemId, long bizId, long extraInfo, long sharding) {
+
+        String currentDate;
+        long currentSecond;
 
         // Clock moved backwards, refuse to generate uid
+        currentSecond = TimeUnit.MILLISECONDS.toSeconds(System.currentTimeMillis());
         if (currentSecond < lastSecond) {
             long refusedSeconds = lastSecond - currentSecond;
             throw new UidGenerateException("Clock moved backwards. Refusing for %d seconds", refusedSeconds);
         }
 
-        // At the same second, increase sequence
-        if (currentSecond == lastSecond) {
-            sequence = (sequence + 1) & bitsAllocator.getMaxSequence();
-            // Exceed the max sequence, we wait the next second to generate uid
-            if (sequence == 0) {
-                currentSecond = getNextSecond(lastSecond);
-            }
+        // 次日 清空
+        currentDate = DateUtils.getCurrentDayByDaySimplePattern();
+        if (currentDate.compareTo(lastDate) > 0) {
+            highSeq = 0;
+            lastDate = currentDate;
+        }
 
-            // At the different second, sequence restart from zero
-        } else {
+        // Exceed the max sequence, increase highSeq
+        if (++sequence > bitsAllocator.getMaxSequence()) {
             sequence = 0L;
+            // 自增highSeq
+            if (++highSeq > bitsAllocator.getMaxHignSeq()) {
+                throwUidGenerateException("HighSeq", highSeq, bitsAllocator.getMaxHignSeq());
+            }
         }
 
         lastSecond = currentSecond;
-
         // Allocate bits for UID
-        return bitsAllocator.allocate(currentSecond - epochSeconds, source, type, ext, workerId, sequence);
+        return bitsAllocator.allocate(currentDate, highSeq, workerId, systemId, bizId, extraInfo, sharding, sequence);
     }
 
-    /**
-     * Get next millisecond
-     */
-    private long getNextSecond(long lastTimestamp) {
-        long timestamp = getCurrentSecond();
-        while (timestamp <= lastTimestamp) {
-            timestamp = getCurrentSecond();
-        }
-
-        return timestamp;
-    }
-
-    /**
-     * Get current second
-     */
-    private long getCurrentSecond() {
-        long currentSecond = TimeUnit.MILLISECONDS.toSeconds(System.currentTimeMillis());
-        if (currentSecond - epochSeconds > bitsAllocator.getMaxDeltaSeconds()) {
-            throw new UidGenerateException("Timestamp bits is exhausted. Refusing UID generate. Now: " + currentSecond);
-        }
-
-        return currentSecond;
+    private void throwUidGenerateException(String bitName, long bitVal, long maxBitVal) {
+        throw new UidGenerateException(bitName + " bits is exhausted. Refusing UID generate. " + bitName + ":" + bitVal + " exceeds the max " + maxBitVal);
     }
 
     /**
@@ -196,37 +173,48 @@ public class BusinessUidGenerator implements UidGenerator, InitializingBean {
         this.workerIdAssigner = workerIdAssigner;
     }
 
-    public void setTimeBits(int timeBits) {
-        if (timeBits > 0) {
-            this.timeBits = timeBits;
-        }
+    public void setHighSeqBits(int highSeqBits) {
+        this.highSeqBits = highSeqBits;
     }
 
-    public void setWorkerBits(int workerBits) {
-        if (workerBits > 0) {
-            this.workerBits = workerBits;
-        }
+    public void setWorkerIdBits(int workerIdBits) {
+        this.workerIdBits = workerIdBits;
     }
 
-    public void setSeqBits(int seqBits) {
-        if (seqBits > 0) {
-            this.seqBits = seqBits;
-        }
+    public void setSystemIdBits(int systemIdBits) {
+        this.systemIdBits = systemIdBits;
     }
 
-    public void setEpochStr(String epochStr) {
-        if (StringUtils.isNotBlank(epochStr)) {
-            this.epochStr = epochStr;
-            this.epochSeconds = TimeUnit.MILLISECONDS.toSeconds(DateUtils.parseByDayPattern(epochStr).getTime());
-        }
+    public void setBizIdBits(int bizIdBits) {
+        this.bizIdBits = bizIdBits;
+    }
+
+    public void setExtraInfoBits(int extraInfoBits) {
+        this.extraInfoBits = extraInfoBits;
+    }
+
+    public void setShardingBits(int shardingBits) {
+        this.shardingBits = shardingBits;
+    }
+
+    public void setSequenceBits(int sequenceBits) {
+        this.sequenceBits = sequenceBits;
     }
 
     public static void main(String[] args) throws Exception {
         BusinessUidGenerator businessUidGenerator = new BusinessUidGenerator();
-        businessUidGenerator.setWorkerIdAssigner(new FixedWorkerIdAssigner(15L));
+        businessUidGenerator.setWorkerIdAssigner(new FixedWorkerIdAssigner(99));
         businessUidGenerator.afterPropertiesSet();
-        long uid = businessUidGenerator.getUID(1023, 31, 7);
-        System.out.println(uid);
-        System.out.println(businessUidGenerator.parseUID(uid));
+
+        int size = 999999;
+        Set<String> ss = new TreeSet<String>();
+        for (int i = 0; i < size; i++) {
+            String uid = businessUidGenerator.getUID(9999, 99, 99, 999);
+            if (!ss.add(uid)) {
+                System.out.println("重复" + uid);
+            }
+        }
+
+        System.out.println(ss.size() == size);
     }
 }

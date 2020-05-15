@@ -22,7 +22,7 @@ package com.baidu.fsg.uid.buffer;
  * @author yutianbao
  */
 @FunctionalInterface
-public interface RejectedPutBufferHandler {
+public interface RejectedPutBufferHandler<T> {
 
     /**
      * Reject put buffer request
@@ -30,5 +30,5 @@ public interface RejectedPutBufferHandler {
      * @param ringBuffer
      * @param uid
      */
-    void rejectPutBuffer(RingBuffer ringBuffer, long uid);
+    void rejectPutBuffer(RingBuffer ringBuffer, T uid);
 }

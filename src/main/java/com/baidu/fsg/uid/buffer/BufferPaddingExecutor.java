@@ -35,7 +35,7 @@ import com.baidu.fsg.uid.utils.PaddedAtomicLong;
  * 
  * @author yutianbao
  */
-public class BufferPaddingExecutor {
+public class BufferPaddingExecutor<T> {
     private static final Logger LOGGER = LoggerFactory.getLogger(RingBuffer.class);
 
     /** Constants */
@@ -50,8 +50,8 @@ public class BufferPaddingExecutor {
     private final PaddedAtomicLong lastSecond;
 
     /** RingBuffer & BufferUidProvider */
-    private final RingBuffer ringBuffer;
-    private final BufferedUidProvider uidProvider;
+    private final RingBuffer<T> ringBuffer;
+    private final BufferedUidProvider<T> uidProvider;
 
     /** Padding immediately by the thread pool */
     private final ExecutorService bufferPadExecutors;
@@ -149,8 +149,8 @@ public class BufferPaddingExecutor {
         // fill the rest slots until to catch the cursor
         boolean isFullRingBuffer = false;
         while (!isFullRingBuffer) {
-            List<Long> uidList = uidProvider.provide(lastSecond.incrementAndGet());
-            for (Long uid : uidList) {
+            List<T> uidList = uidProvider.provide(lastSecond.incrementAndGet());
+            for (T uid : uidList) {
                 isFullRingBuffer = !ringBuffer.put(uid);
                 if (isFullRingBuffer) {
                     break;
