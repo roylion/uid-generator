@@ -73,11 +73,6 @@ public class CachedBusinessUidGenerator extends BusinessUidGenerator implements 
     }
 
     @Override
-    public String parseUID(String uid) {
-        return super.parseUID(uid);
-    }
-
-    @Override
     public void destroy() throws Exception {
         bufferPaddingExecutor.shutdown();
     }
