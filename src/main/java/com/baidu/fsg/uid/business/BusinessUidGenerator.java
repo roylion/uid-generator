@@ -18,12 +18,12 @@ package com.baidu.fsg.uid.business;
 import com.baidu.fsg.uid.exception.UidGenerateException;
 import com.baidu.fsg.uid.utils.DateUtils;
 import com.baidu.fsg.uid.worker.FixedWorkerIdAssigner;
+import com.baidu.fsg.uid.worker.NextDayRefreshWorkerIdAssigner;
 import com.baidu.fsg.uid.worker.WorkerIdAssigner;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.InitializingBean;
 
-import java.util.HashSet;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.TimeUnit;
@@ -66,6 +66,9 @@ public class BusinessUidGenerator implements InitializingBean {
     public void afterPropertiesSet() throws Exception {
         // initialize bits allocator
         bitsAllocator = new BusinessBitsAllocator(highSeqBits, workerIdBits, systemIdBits, bizIdBits, extraInfoBits, shardingBits, sequenceBits);
+        if (workerIdAssigner instanceof NextDayRefreshWorkerIdAssigner) {
+            ((NextDayRefreshWorkerIdAssigner) workerIdAssigner).setBitsAllocator(bitsAllocator);
+        }
 
         // initialize worker id
         workerId = workerIdAssigner.assignWorkerId();
@@ -79,18 +82,7 @@ public class BusinessUidGenerator implements InitializingBean {
 
     public String getUID(long systemId, long bizId, long extraInfo, long sharding) throws UidGenerateException {
         // Check
-        if (systemId > bitsAllocator.getMaxSystemId()) {
-            throwUidGenerateException("SystemId", systemId, bitsAllocator.getMaxSystemId());
-        }
-        if (bizId > bitsAllocator.getMaxBizId()) {
-            throwUidGenerateException("BizId", bizId, bitsAllocator.getMaxBizId());
-        }
-        if (extraInfo > bitsAllocator.getMaxExtraInfo()) {
-            throwUidGenerateException("ExtraInfo", extraInfo, bitsAllocator.getMaxExtraInfo());
-        }
-        if (sharding > bitsAllocator.getMaxSharding()) {
-            throwUidGenerateException("Sharding", sharding, bitsAllocator.getMaxSharding());
-        }
+        checkBusinessParams(systemId, bizId, extraInfo, sharding);
 
         try {
             return nextId(systemId, bizId, extraInfo, sharding);
@@ -160,6 +152,21 @@ public class BusinessUidGenerator implements InitializingBean {
         lastSecond = currentSecond;
         // Allocate bits for UID
         return bitsAllocator.allocate(currentDate, highSeq, workerId, systemId, bizId, extraInfo, sharding, sequence);
+    }
+
+    protected void checkBusinessParams(long systemId, long bizId, long extraInfo, long sharding) {
+        if (systemId > bitsAllocator.getMaxSystemId()) {
+            throwUidGenerateException("SystemId", systemId, bitsAllocator.getMaxSystemId());
+        }
+        if (bizId > bitsAllocator.getMaxBizId()) {
+            throwUidGenerateException("BizId", bizId, bitsAllocator.getMaxBizId());
+        }
+        if (extraInfo > bitsAllocator.getMaxExtraInfo()) {
+            throwUidGenerateException("ExtraInfo", extraInfo, bitsAllocator.getMaxExtraInfo());
+        }
+        if (sharding > bitsAllocator.getMaxSharding()) {
+            throwUidGenerateException("Sharding", sharding, bitsAllocator.getMaxSharding());
+        }
     }
 
     private void throwUidGenerateException(String bitName, long bitVal, long maxBitVal) {

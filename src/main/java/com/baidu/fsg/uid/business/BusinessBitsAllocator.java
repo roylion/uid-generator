@@ -108,6 +108,14 @@ public class BusinessBitsAllocator {
                 .toString();
     }
 
+    public String complete(String uid, long systemId, long bizId, long extraInfo, long sharding) {
+        return String.format(uid,
+                fillZero(systemId, systemIdBits),
+                fillZero(bizId, bizIdBits),
+                fillZero(extraInfo, extraInfoBits),
+                fillZero(sharding, shardingBits));
+    }
+
     public static String fillZero(long bitVal, int bit) {
         StringBuilder result = new StringBuilder(String.valueOf(bitVal));
         while (result.length() < bit) {

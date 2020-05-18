@@ -1,7 +1,6 @@
 package com.baidu.fsg.uid.config;
 
 import com.baidu.fsg.uid.business.BusinessUidGenerator;
-import com.baidu.fsg.uid.worker.DisposableWorkerIdAssigner;
 import com.baidu.fsg.uid.worker.WorkerIdAssigner;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -14,7 +13,7 @@ public class UidGeneratorConfig {
     /**
      * 高位序列，影响每天的uid生成总量
      */
-    @Value("${uid.generator.hignSeqBits:6}")
+    @Value("${uid.generator.hignSeqBits:4}")
     private int hignSeqBits;
 
     /**
@@ -50,20 +49,14 @@ public class UidGeneratorConfig {
     /**
      * 序列节点， 影响每天的uid生成总量
      */
-    @Value("${uid.generator.seqBits:2}")
+    @Value("${uid.generator.seqBits:4}")
     private int seqBits;
-
-    /**
-     * 初始时间节点， 一定要改成第一次启动时的时间，不然会浪费好几年的运行时间
-     */
-    @Value("${uid.generator.epochStr:2020-04-21}")
-    private String epochStr;
 
     @Bean
     @Lazy(false)
-    public BusinessUidGenerator businessUidGenerator() {
+    public BusinessUidGenerator businessUidGenerator(WorkerIdAssigner workerIdAssigner) {
         BusinessUidGenerator businessUidGenerator = new BusinessUidGenerator();
-        businessUidGenerator.setWorkerIdAssigner(disposableWorkerIdAssigner());
+        businessUidGenerator.setWorkerIdAssigner(workerIdAssigner);
         businessUidGenerator.setHighSeqBits(hignSeqBits);
         businessUidGenerator.setWorkerIdBits(workerIdBits);
         businessUidGenerator.setSystemIdBits(systemIdBits);
@@ -74,8 +67,4 @@ public class UidGeneratorConfig {
         return businessUidGenerator;
     }
 
-    @Bean
-    public WorkerIdAssigner disposableWorkerIdAssigner() {
-        return new DisposableWorkerIdAssigner();
-    }
 }

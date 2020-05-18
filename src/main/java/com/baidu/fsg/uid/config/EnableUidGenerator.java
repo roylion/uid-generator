@@ -1,7 +1,6 @@
 package com.baidu.fsg.uid.config;
 
-import org.mybatis.spring.annotation.MapperScan;
-import org.springframework.stereotype.Repository;
+import org.springframework.context.annotation.Import;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
@@ -10,7 +9,6 @@ import java.lang.annotation.Target;
 
 @Target(ElementType.TYPE)
 @Retention(RetentionPolicy.RUNTIME)
-@MapperScan(basePackages = "com.baidu.fsg.uid",
-        annotationClass = Repository.class)
+@Import(UidGeneratorConfig.class)
 public @interface EnableUidGenerator {
 }
