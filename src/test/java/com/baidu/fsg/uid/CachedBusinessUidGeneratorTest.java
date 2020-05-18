@@ -108,8 +108,8 @@ public class CachedBusinessUidGeneratorTest {
     public static void main(String[] args) throws Exception {
         CachedBusinessUidGeneratorTest test = new CachedBusinessUidGeneratorTest();
         CachedBusinessUidGenerator generator = new CachedBusinessUidGenerator();
-        generator.setHighSeqBits(6);
-        generator.setSequenceBits(2);
+        generator.setHighSeqBits(4);
+        generator.setSequenceBits(4);
         generator.setWorkerIdAssigner(() -> 99);
         generator.afterPropertiesSet();
         test.uidGenerator = generator;

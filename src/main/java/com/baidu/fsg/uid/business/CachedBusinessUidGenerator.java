@@ -65,11 +65,11 @@ public class CachedBusinessUidGenerator extends BusinessUidGenerator implements 
         }
     }
 
-    public String completeUID(String uid, long systemId, long bizId, long extraInfo, long sharding) {
+    public String completeUID(String uid, long appId, long bizType, long extraTag, long shardingId) {
         // check
-        checkBusinessParams(systemId, bizId, extraInfo, sharding);
+        checkBusinessParams(appId, bizType, extraTag, shardingId);
         
-        return bitsAllocator.complete(uid, systemId, bizId, extraInfo, sharding);
+        return bitsAllocator.complete(uid, appId, bizType, extraTag, shardingId);
     }
 
     @Override

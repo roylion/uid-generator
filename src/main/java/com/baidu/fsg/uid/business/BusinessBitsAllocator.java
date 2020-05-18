@@ -16,15 +16,15 @@ public class BusinessBitsAllocator {
     public static final int TOTAL_BITS = 29;
 
     /**
-     * Bits for [date-> hignSeq-> workerId-> systemId-> bizId-> extraInfo-> sharding-> sequence]
+     * Bits for [date-> hignSeq-> workerId-> appId-> bizType-> extraTag-> shardingId-> sequence]
      */
     private final int dateBits = 8;
     private final int highSeqBits;
     private final int workerIdBits;
-    private final int systemIdBits;
-    private final int bizIdBits;
-    private final int extraInfoBits;
-    private final int shardingBits;
+    private final int appIdBits;
+    private final int bizTypeBits;
+    private final int extraTagBits;
+    private final int shardingIdBits;
     private final int sequenceBits;
 
     /**
@@ -32,54 +32,54 @@ public class BusinessBitsAllocator {
      */
     private final long maxHignSeq;
     private final long maxWorkerId;
-    private final long maxSystemId;
-    private final long maxBizId;
-    private final long maxExtraInfo;
-    private final long maxSharding;
+    private final long maxAppId;
+    private final long maxBizType;
+    private final long maxExtraTag;
+    private final long maxShardingId;
     private final long maxSequence;
 
 
     private final int highSeqBegin;
     private final int workerIdBegin;
-    private final int systemIdBegin;
-    private final int bizIdBegin;
-    private final int extraInfoBegin;
-    private final int shardingBegin;
+    private final int appIdBegin;
+    private final int bizTypeBegin;
+    private final int extraTagBegin;
+    private final int shardingIdBegin;
     private final int sequenceBegin;
 
     /**
      * Constructor
      */
-    public BusinessBitsAllocator(int highSeqBits, int workerIdBits, int systemIdBits, int bizIdBits, int extraInfoBits, int shardingBits, int sequenceBits) {
-        int allocateTotalBits = dateBits + highSeqBits + workerIdBits + systemIdBits + bizIdBits + extraInfoBits + shardingBits + sequenceBits;
+    public BusinessBitsAllocator(int highSeqBits, int workerIdBits, int appIdBits, int bizTypeBits, int extraTagBits, int shardingIdBits, int sequenceBits) {
+        int allocateTotalBits = dateBits + highSeqBits + workerIdBits + appIdBits + bizTypeBits + extraTagBits + shardingIdBits + sequenceBits;
         Assert.isTrue(allocateTotalBits == TOTAL_BITS, "allocate not enough 29 bits");
 
         /** bits */
         this.highSeqBits = highSeqBits;
         this.workerIdBits = workerIdBits;
-        this.systemIdBits = systemIdBits;
-        this.bizIdBits = bizIdBits;
-        this.extraInfoBits = extraInfoBits;
-        this.shardingBits = shardingBits;
+        this.appIdBits = appIdBits;
+        this.bizTypeBits = bizTypeBits;
+        this.extraTagBits = extraTagBits;
+        this.shardingIdBits = shardingIdBits;
         this.sequenceBits = sequenceBits;
 
         /** max */
         this.maxHignSeq = calcMaxVal(highSeqBits);
         this.maxWorkerId = calcMaxVal(workerIdBits);
-        this.maxSystemId = calcMaxVal(systemIdBits);
-        this.maxBizId = calcMaxVal(bizIdBits);
-        this.maxExtraInfo = calcMaxVal(extraInfoBits);
-        this.maxSharding = calcMaxVal(shardingBits);
+        this.maxAppId = calcMaxVal(appIdBits);
+        this.maxBizType = calcMaxVal(bizTypeBits);
+        this.maxExtraTag = calcMaxVal(extraTagBits);
+        this.maxShardingId = calcMaxVal(shardingIdBits);
         this.maxSequence = calcMaxVal(sequenceBits);
 
         /** begin */
         this.highSeqBegin = dateBits;
         this.workerIdBegin = highSeqBegin + highSeqBits;
-        this.systemIdBegin = workerIdBegin + workerIdBits;
-        this.bizIdBegin = systemIdBegin + systemIdBits;
-        this.extraInfoBegin = bizIdBegin + bizIdBits;
-        this.shardingBegin = extraInfoBegin + extraInfoBits;
-        this.sequenceBegin = shardingBegin + shardingBits;
+        this.appIdBegin = workerIdBegin + workerIdBits;
+        this.bizTypeBegin = appIdBegin + appIdBits;
+        this.extraTagBegin = bizTypeBegin + bizTypeBits;
+        this.shardingIdBegin = extraTagBegin + extraTagBits;
+        this.sequenceBegin = shardingIdBegin + shardingIdBits;
     }
 
     /**
@@ -87,14 +87,14 @@ public class BusinessBitsAllocator {
      *
      * @return
      */
-    public String allocate(String date, long hignSeq, long workerId, long systemId, long bizId, long extraInfo, long sharding, long sequence) {
+    public String allocate(String date, long hignSeq, long workerId, long appId, long bizType, long extraTag, long shardingId, long sequence) {
         return new StringBuilder(date)
                 .append(fillZero(hignSeq, highSeqBits))
                 .append(fillZero(workerId, workerIdBits))
-                .append(fillZero(systemId, systemIdBits))
-                .append(fillZero(bizId, bizIdBits))
-                .append(fillZero(extraInfo, extraInfoBits))
-                .append(fillZero(sharding, shardingBits))
+                .append(fillZero(appId, appIdBits))
+                .append(fillZero(bizType, bizTypeBits))
+                .append(fillZero(extraTag, extraTagBits))
+                .append(fillZero(shardingId, shardingIdBits))
                 .append(fillZero(sequence, sequenceBits))
                 .toString();
     }
@@ -108,12 +108,12 @@ public class BusinessBitsAllocator {
                 .toString();
     }
 
-    public String complete(String uid, long systemId, long bizId, long extraInfo, long sharding) {
+    public String complete(String uid, long appId, long bizType, long extraTag, long shardingId) {
         return String.format(uid,
-                fillZero(systemId, systemIdBits),
-                fillZero(bizId, bizIdBits),
-                fillZero(extraInfo, extraInfoBits),
-                fillZero(sharding, shardingBits));
+                fillZero(appId, appIdBits),
+                fillZero(bizType, bizTypeBits),
+                fillZero(extraTag, extraTagBits),
+                fillZero(shardingId, shardingIdBits));
     }
 
     public static String fillZero(long bitVal, int bit) {
@@ -151,20 +151,20 @@ public class BusinessBitsAllocator {
         return workerIdBits;
     }
 
-    public int getSystemIdBits() {
-        return systemIdBits;
+    public int getAppIdBits() {
+        return appIdBits;
     }
 
-    public int getBizIdBits() {
-        return bizIdBits;
+    public int getBizTypeBits() {
+        return bizTypeBits;
     }
 
-    public int getExtraInfoBits() {
-        return extraInfoBits;
+    public int getExtraTagBits() {
+        return extraTagBits;
     }
 
-    public int getShardingBits() {
-        return shardingBits;
+    public int getShardingIdBits() {
+        return shardingIdBits;
     }
 
     public int getSequenceBits() {
@@ -179,20 +179,20 @@ public class BusinessBitsAllocator {
         return maxWorkerId;
     }
 
-    public long getMaxSystemId() {
-        return maxSystemId;
+    public long getMaxAppId() {
+        return maxAppId;
     }
 
-    public long getMaxBizId() {
-        return maxBizId;
+    public long getMaxBizType() {
+        return maxBizType;
     }
 
-    public long getMaxExtraInfo() {
-        return maxExtraInfo;
+    public long getMaxExtraTag() {
+        return maxExtraTag;
     }
 
-    public long getMaxSharding() {
-        return maxSharding;
+    public long getMaxShardingId() {
+        return maxShardingId;
     }
 
     public long getMaxSequence() {
@@ -207,20 +207,20 @@ public class BusinessBitsAllocator {
         return workerIdBegin;
     }
 
-    public int getSystemIdBegin() {
-        return systemIdBegin;
+    public int getAppIdBegin() {
+        return appIdBegin;
     }
 
-    public int getBizIdBegin() {
-        return bizIdBegin;
+    public int getBizTypeBegin() {
+        return bizTypeBegin;
     }
 
-    public int getExtraInfoBegin() {
-        return extraInfoBegin;
+    public int getExtraTagBegin() {
+        return extraTagBegin;
     }
 
-    public int getShardingBegin() {
-        return shardingBegin;
+    public int getShardingIdBegin() {
+        return shardingIdBegin;
     }
 
     public int getSequenceBegin() {
